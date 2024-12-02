@@ -3,23 +3,24 @@ import pandas as pd
 from sklearn.linear_model import LassoCV, RidgeCV, LinearRegression, LogisticRegressionCV, LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import root_mean_squared_error
+from scipy.stats import ttest_1samp
 
 
 def regression(data: pd.DataFrame, label="1D Price", test_size=0.2):
-    data = data[["EBITDA", "Revenue", "Operating Margin", "ROA",
-                 "Debt-to-Equity", "P/E Ratio", "IPO Price", "Sentiment Score Before", "Sentiment Score All", label]].copy()
-    data["Percent Return"] = (
-        data[label] - data["IPO Price"]) / data["IPO Price"]
+    print("-"*50)
+    print(f"Regression on {label}")
+    columns = ["EBITDA", "Revenue", "Operating Margin", "ROA",
+               "Debt-to-Equity", "P/E Ratio", "IPO Price", "Sentiment Score Before", "Sentiment Score All"]
+
+    data = data[columns + [label]].copy()
+    data["Log Return"] = np.log(data[label]/data["IPO Price"])
 
     data = data.replace([np.inf, -np.inf], np.nan)
     data = data.dropna().reset_index(drop=True)
 
-    X = data.drop(columns=[label, "Percent Return"])
-    y = data["Percent Return"]
-    y[y >= 0] = 1
-    # y[y == 0] = 0.5
-    y[y < 0] = 0
+    X = data.drop(columns=[label, "Log Return"])
+    y = data["Log Return"]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, shuffle=False)
@@ -28,14 +29,33 @@ def regression(data: pd.DataFrame, label="1D Price", test_size=0.2):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    lasso = LogisticRegression(
-        penalty='l1', C=2, solver='liblinear', fit_intercept=False)
+    lasso = LassoCV(n_alphas=10000, max_iter=100000,
+                    n_jobs=-1, fit_intercept=False)
     lasso.fit(X_train_scaled, y_train)
-    y_test_predicted_lasso = lasso.predict(X_test_scaled)
+    y_test_predicted = lasso.predict(X_test_scaled)
 
-    print((lasso.coef_))
-    print(y_test_predicted_lasso)
-    print(accuracy_score(y_test, y_test_predicted_lasso))
+    rmse = root_mean_squared_error(y_test, y_test_predicted)
+    print(f"RMSE: {rmse}")
+
+    coef = {x: y for x, y in zip(columns, lasso.coef_)}
+    print(f"Coefficients: {coef}")
+
+    print(f"Alpha: {lasso.alpha_}")
+
+    label_day_mapping = {
+        "1D Price": 256,
+        "1W Price": 52,
+        "1M Price": 12,
+        "3M Price": 4,
+        "1Y Price": 1
+    }
+    y_test_predicted_annuailzed = y_test_predicted * label_day_mapping[label]
+    actual_returns = (y_test * np.sign(y_test_predicted)
+                      )[np.abs(y_test_predicted_annuailzed) >= np.log(1.1)]
+    sharpe = np.mean(actual_returns) / np.std(actual_returns)
+    print(f"Annualized Sharpe: {sharpe * np.sqrt(label_day_mapping[label])}")
+    print(f"p-value: {ttest_1samp(actual_returns, 0)[1]}")
+    print("-"*50)
 
 
 if __name__ == "__main__":
