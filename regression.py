@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LassoCV, RidgeCV, LinearRegression, LogisticRegressionCV
+from sklearn.linear_model import LassoCV, RidgeCV, LinearRegression, LogisticRegressionCV, LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
@@ -28,22 +28,14 @@ def regression(data: pd.DataFrame, label="1D Price", test_size=0.2):
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
 
-    lasso = LogisticRegressionCV(
-        penalty="l1", solver="liblinear", max_iter=100000, n_jobs=-1)
+    lasso = LogisticRegression(
+        penalty='l1', C=2, solver='liblinear', fit_intercept=False)
     lasso.fit(X_train_scaled, y_train)
     y_test_predicted_lasso = lasso.predict(X_test_scaled)
 
-    ridge = LogisticRegressionCV(penalty="l2")
-    ridge.fit(X_train_scaled, y_train)
-    y_test_predicted_ridge = ridge.predict(X_test_scaled)
-
-    ols = LogisticRegressionCV()
-    ols.fit(X_train_scaled, y_train)
-    y_test_predicted_ols = ols.predict(X_test_scaled)
-
+    print((lasso.coef_))
+    print(y_test_predicted_lasso)
     print(accuracy_score(y_test, y_test_predicted_lasso))
-    print(accuracy_score(y_test, y_test_predicted_ridge))
-    print(accuracy_score(y_test, y_test_predicted_ols))
 
 
 if __name__ == "__main__":
